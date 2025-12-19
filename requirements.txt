@@ -1,3 +1,5 @@
 streamlit
 numpy
 matplotlib
+sqlalchemy
+psycopg2-binary
