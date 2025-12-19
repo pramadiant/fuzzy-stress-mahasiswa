@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import time
 import matplotlib.pyplot as plt
+from sqlalchemy import text  # <--- WAJIB DITAMBAH
 from datetime import datetime, date, time as dt_time
 
 # --- [IMPORT DARI FILE ASLI KAMU] ---
@@ -30,16 +31,17 @@ def login_user(username, password):
     return None
 
 def register_user(username, password, nama, nim):
-    """Mendaftarkan user baru"""
+    """Mendaftarkan user baru (Fixed)"""
     try:
         with conn.session as s:
             s.execute(
-                "INSERT INTO users (username, password, nama_lengkap, nim) VALUES (:u, :p, :n, :nim);",
+                text("INSERT INTO users (username, password, nama_lengkap, nim) VALUES (:u, :p, :n, :nim);"),
                 params={"u": username, "p": password, "n": nama, "nim": nim}
             )
             s.commit()
         return True
-    except Exception:
+    except Exception as e:
+        st.error(f"Gagal daftar: {e}")
         return False
 
 def simpan_hasil_ke_db(username, hasil, kategori):
@@ -48,11 +50,11 @@ def simpan_hasil_ke_db(username, hasil, kategori):
     try:
         with conn.session as s:
             s.execute(
-                """
+                text("""
                 INSERT INTO stress_history 
                 (username, skor_total, kategori, detail_beban, detail_kesulitan, detail_deadline, detail_tidur) 
                 VALUES (:u, :skor, :kat, :beban, :sulit, :dl, :tidur);
-                """,
+                """),
                 params={
                     "u": username,
                     "skor": hasil['skor_total'],
