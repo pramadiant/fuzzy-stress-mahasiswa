@@ -71,6 +71,37 @@ def simpan_hasil_ke_db(username, hasil, kategori):
         st.error(f"Gagal simpan: {e}")
         return False
 
+    # ==========================================
+# FUNGSI BARU: GENERATE SARAN
+# ==========================================
+def generate_saran(detail):
+    """
+    Memberikan saran berdasarkan faktor dominan penyebab stres.
+    detail: Dictionary hasil['detail']
+    """
+    saran_list = []
+    
+    # 1. Analisis Beban Tugas (Kuantitas)
+    if detail['beban_tugas'] >= 4:
+        saran_list.append("📦 **Manajemen Beban:** Jumlah tugasmu sangat banyak. Coba gunakan teknik **'Time Blocking'**. Pecah waktu kerjamu menjadi sesi fokus 25 menit (Teknik Pomodoro) agar tidak kewalahan melihat tumpukan tugas.")
+    
+    # 2. Analisis Kesulitan
+    if detail['kesulitan_rata2'] >= 7:
+        saran_list.append("brain **Kesulitan Tinggi:** Materi minggu ini terasa sulit. Jangan ragu untuk **diskusi dengan teman sekelas** atau konsultasi ke dosen saat jam kerja. Mencoba memahami sendiri materi sulit seringkali memicu stres berlebih.")
+    
+    # 3. Analisis Deadline (Jam rata-rata)
+    if detail['deadline_rata2_jam'] < 24:
+        saran_list.append("⏰ **Deadline Mepet:** Waktumu sempit! Gunakan prinsip **'Eat the Frog'**: Kerjakan tugas yang paling prioritas/sulit terlebih dahulu pagi ini. Hindari multitasking.")
+
+    # 4. Analisis Tidur
+    if detail['tidur_rata2'] < 6:
+        saran_list.append("🛌 **Kurang Tidur:** Awas, kurang tidur menurunkan fungsi kognitif dan membuatmu lebih mudah stres. Usahakan **Power Nap** (tidur siang 20 menit) untuk me-refresh otakmu hari ini.")
+
+    # Jika tidak ada trigger di atas (semua aman)
+    if not saran_list:
+        saran_list.append("✨ **Pertahankan!** Manajemen waktumu sudah cukup baik. Tetap jaga keseimbangan antara kuliah dan istirahat.")
+
+    return saran_list
 # ==========================================
 # LOGIKA UTAMA APLIKASI
 # ==========================================
@@ -126,6 +157,8 @@ else:
     # Menu Navigasi
     menu = st.radio("Menu", ["📝 Hitung Stres", "📊 Riwayat Saya"], horizontal=True)
     st.write("---")
+
+    
 
     if menu == "📝 Hitung Stres":
         # ========================================================
@@ -188,39 +221,64 @@ else:
             jam_kuliah = {h: st.slider(f"Kuliah {h}", 0.0, 12.0, 3.0) for h in hari}
 
         # 4. Tombol Hitung (MODIFIKASI DI SINI: TAMBAH SIMPAN DB)
+        # 4. Tombol Hitung (VERSI BARU DENGAN SARAN)
         if st.button("✔ Hitung & Simpan"):
             hasil = hitung_stres_mingguan(minggu_type, st.session_state.matkul_data, jam_tidur, jam_kuliah)
             skor = hasil['skor_total']
 
-            # Tentukan Kategori
-            if skor <= 30: kat_text, kat_db = "🟢 Rendah", "Rendah"
-            elif skor <= 60: kat_text, kat_db = "🟡 Sedang", "Sedang"
-            else: kat_text, kat_db = "🔴 Tinggi", "Tinggi"
+            # Tentukan Kategori & Warna
+            if skor <= 30: 
+                kat_text, kat_db = "🟢 Rendah", "Rendah"
+                warna_info = "success"
+            elif skor <= 60: 
+                kat_text, kat_db = "🟡 Sedang", "Sedang"
+                warna_info = "warning"
+            else: 
+                kat_text, kat_db = "🔴 Tinggi", "Tinggi"
+                warna_info = "error"
 
-            # Tampilkan Hasil (Sama seperti kodemu)
-            st.success("Selesai!")
-            st.metric("Skor Stres", f"{skor:.2f}", delta=kat_text)
+            # Tampilkan Hasil Utama
+            st.success("Perhitungan Selesai!")
             
-            # --- [BAGIAN BARU: SIMPAN OTOMATIS] ---
+            # Layout 2 Kolom: Kiri (Skor), Kanan (Grafik)
+            col_res1, col_res2 = st.columns([1, 1])
+            
+            with col_res1:
+                st.metric("Skor Stres Anda", f"{skor:.2f}", delta=kat_text)
+                st.info(f"Kategori Stres: **{kat_db}**")
+                
+                # --- [BAGIAN BARU: TAMPILKAN SARAN] ---
+                st.write("### 💡 Saran Untukmu:")
+                list_saran = generate_saran(hasil['detail'])
+                for s in list_saran:
+                    if skor > 30:
+                        st.warning(s)
+                    else:
+                        st.info(s)
+            
+            with col_res2:
+                st.write("#### Komposisi Faktor Stres")
+                # Grafik Pie
+                labels = ['Beban (Jumlah Tugas)', 'Tingkat Kesulitan', 'Deadline (Kedesakan)', 'Kualitas Tidur']
+                
+                # Gunakan data asli untuk label pie chart biar akurat
+                values_display = [
+                    hasil["detail"]["beban_tugas"],
+                    hasil["detail"]["kesulitan_rata2"],
+                    hasil["detail"]["deadline_rata2_jam"],
+                    hasil["detail"]["tidur_rata2"]
+                ]
+                
+                fig, ax = plt.subplots(figsize=(3,3))
+                # Tips: Gunakan 'explode' untuk menonjolkan bagian terbesar
+                try:
+                    explode = tuple([0.1 if v == max(values_display) and v > 0 else 0 for v in values_display])
+                except:
+                    explode = None
+                
+                ax.pie(values_display, labels=labels, autopct='%1.1f%%', explode=explode, startangle=90)
+                st.pyplot(fig)
+
+            # Simpan ke DB
             if simpan_hasil_ke_db(user['username'], hasil, kat_db):
                 st.toast("Data tersimpan ke riwayat!", icon="✅")
-            
-            # Grafik Pie (Sama seperti kodemu)
-            labels = ['Beban', 'Kesulitan', 'Deadline', 'Tidur']
-            values = [hasil["detail"]["beban_tugas"], hasil["detail"]["kesulitan_rata2"], 
-                      hasil["detail"]["deadline_rata2_jam"], hasil["detail"]["tidur_rata2"]]
-            fig, ax = plt.subplots(figsize=(3,3))
-            ax.pie(values, labels=labels, autopct='%1.1f%%')
-            st.pyplot(fig)
-
-    elif menu == "📊 Riwayat Saya":
-        # --- [BAGIAN BARU: DASHBOARD] ---
-        st.header("Grafik Riwayat Stres")
-        df_hist = conn.query(f"SELECT * FROM stress_history WHERE username = '{user['username']}' ORDER BY created_at ASC", ttl=0)
-        
-        if not df_hist.empty:
-            df_hist['Tanggal'] = pd.to_datetime(df_hist['created_at']).dt.strftime('%d %b')
-            st.line_chart(df_hist, x='Tanggal', y='skor_total')
-            st.dataframe(df_hist[['created_at', 'skor_total', 'kategori', 'detail_beban']])
-        else:
-            st.info("Belum ada data riwayat.")
