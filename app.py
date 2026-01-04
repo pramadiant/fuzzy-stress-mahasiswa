@@ -71,7 +71,7 @@ def simpan_hasil_ke_db(username, hasil, kategori):
         st.error(f"Gagal simpan: {e}")
         return False
 
-    # ==========================================
+# ==========================================
 # FUNGSI BARU: GENERATE SARAN
 # ==========================================
 def generate_saran(detail):
@@ -282,3 +282,40 @@ else:
             # Simpan ke DB
             if simpan_hasil_ke_db(user['username'], hasil, kat_db):
                 st.toast("Data tersimpan ke riwayat!", icon="✅")
+        
+    elif menu == "📊 Riwayat Saya":
+        st.title("📊 Riwayat Saya")
+
+        try:
+            df = conn.query(
+                """
+                SELECT id, username, skor_total, kategori,
+                       detail_beban, detail_kesulitan, detail_deadline, detail_tidur,
+                       created_at
+                FROM stress_history
+                WHERE username = :u
+                ORDER BY created_at DESC;
+                """,
+                params={"u": user["username"]},
+                ttl=0
+            )
+
+            if df.empty:
+                st.info("Belum ada riwayat perhitungan. Silakan hitung stres dulu.")
+            else:
+                st.success(f"Total riwayat: {len(df)}")
+
+                # Tabel riwayat
+                st.dataframe(df, use_container_width=True)
+
+                # Grafik perkembangan skor
+                df_chart = df.copy()
+                df_chart["created_at"] = pd.to_datetime(df_chart["created_at"], errors="coerce")
+                df_chart = df_chart.dropna(subset=["created_at"]).sort_values("created_at")
+
+                st.subheader("📈 Grafik Perkembangan Skor Stres")
+                st.line_chart(df_chart.set_index("created_at")["skor_total"])
+
+        except Exception as e:
+            st.error("Gagal mengambil data riwayat.")
+            st.exception(e)
